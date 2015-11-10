@@ -16,7 +16,7 @@ public class WidthFirstCrawlerEngineTest
     private static final byte[] CAFEBABE = {(byte)0xCA, (byte)0xFE, (byte)0xBA, (byte)0xBE};
     Webcrawler.WidthFirstCrawlerEngine engine;
 
-    @Before
+    /*@Before
     public void setUp() throws Exception
     {
         Constructor<Webcrawler.WidthFirstCrawlerEngine> constructor =
@@ -106,5 +106,5 @@ public class WidthFirstCrawlerEngineTest
             System.out.println("No utf-8 support?");
             return str.getBytes();
         }
-    }
+    }*/
 }

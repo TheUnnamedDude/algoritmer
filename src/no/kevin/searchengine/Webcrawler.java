@@ -1,17 +1,18 @@
 package no.kevin.searchengine;
 
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
 public class Webcrawler
 {
     private CrawlerEngine engine;
-    private Set<String> visitedLinks = new HashSet<>();
-    private HashMap<String, ArrayList<String>> index = new HashMap<>();
+    private HashSet<String> visitedLinks = new HashSet<>();
+    private HashMap<String, String[]> index = new HashMap<>();
+    private int words;
+    private int maxSize;
 
     public static void main(String[] args)
     {
@@ -23,56 +24,69 @@ public class Webcrawler
         this(Short.MAX_VALUE);
     }
 
-    public Webcrawler(int maxValue)
+    public Webcrawler(int maxSize)
     {
-        engine = new WidthFirstCrawlerEngine(maxValue);
+        resize(maxSize);
+        engine = new WidthFirstCrawlerEngine();
     }
 
     public void addWordsToIndex(String... words)
     {
-        Arrays.stream(words).forEach(str -> index.put(str, new ArrayList<>()));
+        Arrays.stream(words).forEach(str -> index.put(str, null));
     }
 
     public void resize(int newSize)
     {
-        engine.resize(newSize);
+        this.maxSize = newSize;
     }
 
     public void crawl(String url)
     {
         WebPageReader reader = new WebPageReader(url);
         engine.addAll(reader.getLinks());
-        while (engine.hasNext() && visitedLinks.size() <= engine.getMaxSize())
+        while (engine.hasNext() && words < maxSize)
         {
-            readAllLinks(engine.nextUrl());
+            readAllLinks(engine.next());
         }
-        System.out.println(visitedLinks);
-        System.out.println(visitedLinks.size());
+        if (words >= maxSize)
+        {
+            engine = null;
+            visitedLinks = null;
+        }
     }
 
     private void readAllLinks(String url)
     {
-        System.out.printf("(%5d/%5d) ", visitedLinks.size(), engine.getMaxSize());
+        System.out.printf("(%5d/%5d) ", words, maxSize);
         System.out.printf("crawling: %s%n", url);
 
-        long current = System.currentTimeMillis();
         WebPageReader reader = new WebPageReader(url);
         reader.run();
-        System.out.printf("page download: %dms ", System.currentTimeMillis() - current);
-
-        current = System.currentTimeMillis();
         visitedLinks.add(url);
 
         engine.addAll(reader.getLinks().stream()
                 .filter(s -> !visitedLinks.contains(s))
                 .collect(Collectors.toList()));
 
-        reader.getWords().stream()
-                .map(index::get)
-                .filter(list -> list != null)
-                .filter(list -> !list.contains(url))
-                .forEach(list -> list.add(url));
-        System.out.printf("logic: %dms%n", System.currentTimeMillis() - current);
+        for (String word : reader.getWords())
+        {
+            if (words >= maxSize)
+                break;
+            if (!index.containsKey(word))
+                continue;
+            String[] list = index.get(word);
+            if (list == null)
+            {
+                list = new String[1];
+            }
+            else
+            {
+                list = Arrays.copyOf(list, list.length + 1);
+                list[list.length - 1] = url;
+            }
+            words++;
+            index.put(word, list);
+        }
     }
 
     public void setEngine(Class<? extends CrawlerEngine> clazz)
@@ -81,11 +95,11 @@ public class Webcrawler
             return;
         try
         {
-            Constructor<? extends CrawlerEngine> engineClass = clazz.getDeclaredConstructor(Webcrawler.class, int.class);
-            CrawlerEngine newEngine = engineClass.newInstance(this, engine.maxSize);
+            Constructor<? extends CrawlerEngine> engineClass = clazz.getDeclaredConstructor(Webcrawler.class);
+            CrawlerEngine newEngine = engineClass.newInstance(this);
             while (engine.hasNext())
             {
-                newEngine.add(engine.nextUrlBytes());
+                newEngine.add(engine.next());
             }
             this.engine = newEngine;
         }
@@ -97,120 +111,46 @@ public class Webcrawler
 
     public String[] searchHits(String searchTerm)
     {
-        if (!index.containsKey(searchTerm))
+        if (index.get(searchTerm) == null)
             return new String[0];
-        return index.get(searchTerm).stream().toArray(String[]::new);
+        return index.get(searchTerm);
     }
 
     public int getSize()
     {
-        return engine.getSize();
+        return words;
     }
 
-    public static String toString(byte[] bytes)
+    public interface CrawlerEngine
     {
-        try
-        {
-            return new String(bytes, "UTF-8");
-        }
-        catch (UnsupportedEncodingException e)
-        {
-            e.printStackTrace();
-            return new String(bytes);
-        }
-    }
+        boolean hasNext();
+        void clear();
+        String next();
+        void add(String value);
 
-    public static byte[] toBytes(String str)
-    {
-        try
-        {
-            return str.getBytes("UTF-8");
-        }
-        catch (UnsupportedEncodingException e)
-        {
-            return str.getBytes();
-        }
-    }
-
-    public abstract class CrawlerEngine
-    {
-        int maxSize;
-        private int curr = 0;
-        public CrawlerEngine(int maxSize)
-        {
-            this.maxSize = maxSize;
-        }
-
-        public abstract boolean hasNext();
-        public abstract void resize(int newSize);
-        abstract void addInternal(byte[] bytes);
-        abstract byte[] nextUrlBytesInternal();
-
-        public String nextUrl()
-        {
-            return Webcrawler.toString(nextUrlBytes());
-        }
-
-        public void add(String url)
-        {
-            add(Webcrawler.toBytes(url));
-        }
-
-        public void add(byte[] bytes)
-        {
-            if (curr >= maxSize)
-                return; // Should probably not silently break...
-            curr++;
-            addInternal(bytes);
-        }
-
-        public byte[] nextUrlBytes()
-        {
-            if (curr <= 0)
-                throw new ArrayIndexOutOfBoundsException("No more elements in crawler");
-            curr--;
-            return nextUrlBytesInternal();
-        }
-
-        public int getMaxSize()
-        {
-            return maxSize;
-        }
-
-        public int getSize()
-        {
-            return curr;
-        }
-
-        public void addAll(Iterable<String> iterable)
-        {
-            iterable.forEach(this::add);
-        }
-
-        public void addAllBytes(Iterable<byte[]> iterable)
+        default void addAll(Iterable<String> iterable)
         {
             iterable.forEach(this::add);
         }
     }
 
-    public class DepthFirstCrawlerEngine extends CrawlerEngine
+    public class DepthFirstCrawlerEngine implements CrawlerEngine
     {
-        private final Stack<byte[]> urlStack;
+        private final Stack<String> urlStack;
 
-        public DepthFirstCrawlerEngine(int maxSize)
+        public DepthFirstCrawlerEngine()
         {
-            super(maxSize);
             urlStack = new Stack<>();
         }
 
         @Override
-        public byte[] nextUrlBytesInternal()
+        public String next()
         {
             return urlStack.pop();
         }
 
         @Override
-        public void addInternal(byte[] url)
+        public void add(String url)
         {
             urlStack.push(url);
         }
@@ -222,38 +162,29 @@ public class Webcrawler
         }
 
         @Override
-        public int getSize()
+        public void clear()
         {
-            return urlStack.size();
-        }
-
-        @Override
-        public void resize(int newSize)
-        {
-            if (newSize < urlStack.size())
-                throw new ArrayIndexOutOfBoundsException("Cannot shrink to a size less then the current number of entries");
-            this.maxSize = newSize;
+            this.urlStack.clear();
         }
     }
 
-    public class WidthFirstCrawlerEngine extends CrawlerEngine
+    public class WidthFirstCrawlerEngine implements CrawlerEngine
     {
-        private Queue<byte[]> urlQueue;
+        private Queue<String> urlQueue;
 
-        public WidthFirstCrawlerEngine(int maxSize)
+        public WidthFirstCrawlerEngine()
         {
-            super(maxSize);
-            urlQueue = new ArrayBlockingQueue<>(maxSize);
+            urlQueue = new LinkedBlockingQueue<>();
         }
 
         @Override
-        public byte[] nextUrlBytesInternal()
+        public String next()
         {
             return urlQueue.poll();
         }
 
         @Override
-        void addInternal(byte[] url)
+        public void add(String url)
         {
             urlQueue.add(url);
         }
@@ -265,21 +196,24 @@ public class Webcrawler
         }
 
         @Override
-        public int getSize()
+        public void clear()
         {
-            return urlQueue.size();
+            urlQueue.clear();
+        }
+    }
+
+    public class ByteUrl
+    {
+        private byte[] bytes;
+
+        public ByteUrl(String original)
+        {
+
         }
 
-        @Override
-        public void resize(int newSize)
+        public String value()
         {
-            if (newSize < urlQueue.size())
-                throw new ArrayIndexOutOfBoundsException("Cannot shrink to a size less then the current number of entries");
-
-            Queue<byte[]> newQueue = new ArrayBlockingQueue<>(newSize);
-            urlQueue.forEach(newQueue::add);
-            this.maxSize = newSize;
-            this.urlQueue = newQueue;
+            return null;
         }
     }
 }
