@@ -10,8 +10,8 @@ import java.util.stream.Collectors;
 public class Webcrawler
 {
     private CrawlerEngine engine;
-    private Set<byte[]> visitedLinks = new HashSet<>();
-    private HashMap<String, ArrayList<byte[]>> index = new HashMap<>();
+    private Set<String> visitedLinks = new HashSet<>();
+    private HashMap<String, ArrayList<String>> index = new HashMap<>();
 
     public static void main(String[] args)
     {
@@ -41,12 +41,9 @@ public class Webcrawler
     public void crawl(String url)
     {
         WebPageReader reader = new WebPageReader(url);
-        System.out.println(reader.getLinks());
-        System.out.println(reader.getLinks().size());
         engine.addAll(reader.getLinks());
         while (engine.hasNext() && visitedLinks.size() <= engine.getMaxSize())
         {
-            System.out.printf("(%5d/%5d) ", visitedLinks.size(), engine.getMaxSize());
             readAllLinks(engine.nextUrl());
         }
         System.out.println(visitedLinks);
@@ -55,17 +52,27 @@ public class Webcrawler
 
     private void readAllLinks(String url)
     {
-        System.out.println("crawling: " + url);
+        System.out.printf("(%5d/%5d) ", visitedLinks.size(), engine.getMaxSize());
+        System.out.printf("crawling: %s%n", url);
+
+        long current = System.currentTimeMillis();
         WebPageReader reader = new WebPageReader(url);
-        visitedLinks.add(toBytes(url));
-        engine.addAllBytes(reader.getLinks().stream()
-                .map(Webcrawler::toBytes)
+        reader.run();
+        System.out.printf("page download: %dms ", System.currentTimeMillis() - current);
+
+        current = System.currentTimeMillis();
+        visitedLinks.add(url);
+
+        engine.addAll(reader.getLinks().stream()
                 .filter(s -> !visitedLinks.contains(s))
                 .collect(Collectors.toList()));
+
         reader.getWords().stream()
                 .map(index::get)
                 .filter(list -> list != null)
-                .forEach(list -> list.add(toBytes(url)));
+                .filter(list -> !list.contains(url))
+                .forEach(list -> list.add(url));
+        System.out.printf("logic: %dms%n", System.currentTimeMillis() - current);
     }
 
     public void setEngine(Class<? extends CrawlerEngine> clazz)
@@ -74,8 +81,8 @@ public class Webcrawler
             return;
         try
         {
-            Constructor<? extends CrawlerEngine> engineClass = clazz.getConstructor(Integer.class);
-            CrawlerEngine newEngine = engineClass.newInstance(engine.maxSize);
+            Constructor<? extends CrawlerEngine> engineClass = clazz.getDeclaredConstructor(Webcrawler.class, int.class);
+            CrawlerEngine newEngine = engineClass.newInstance(this, engine.maxSize);
             while (engine.hasNext())
             {
                 newEngine.add(engine.nextUrlBytes());
@@ -90,7 +97,9 @@ public class Webcrawler
 
     public String[] searchHits(String searchTerm)
     {
-        return index.get(searchTerm).stream().map(Webcrawler::toString).toArray(String[]::new);
+        if (!index.containsKey(searchTerm))
+            return new String[0];
+        return index.get(searchTerm).stream().toArray(String[]::new);
     }
 
     public int getSize()

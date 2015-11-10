@@ -94,6 +94,41 @@ public class DepthFirstCrawlerEngineTest
         engine.nextUrl();
     }
 
+    @Test
+    public void testResizeUp()
+    {
+        engine.resize(SIZE*2);
+        assertEquals(SIZE*2, engine.getMaxSize());
+    }
+
+    @Test
+    public void testResizeUpOverflow()
+    {
+        engine.resize(SIZE*2);
+        for (int i = 0; i < SIZE*2 + 1; i++)
+        {
+            engine.add("Fisker");
+        }
+        assertEquals(SIZE*2, engine.getSize());
+    }
+
+    @Test
+    public void testResizeDown()
+    {
+        engine.resize(SIZE/2);
+        assertEquals(SIZE/2, engine.getMaxSize());
+    }
+
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testResizeDownBounds()
+    {
+        for (int i = 0; i < SIZE*2 + 1; i++)
+        {
+            engine.add("Fisker");
+        }
+        engine.resize(SIZE/2);
+    }
+
     public byte[] toBytes(String str)
     {
         try

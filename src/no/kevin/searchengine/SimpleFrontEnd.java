@@ -6,7 +6,8 @@ import java.util.NoSuchElementException;
 public class SimpleFrontEnd {
 
     private static final String WIKIPEDIA = "https://en.wikipedia.org/wiki/Main_Page";
-    private static final int MAX = 32768;
+    private static final int MAX = 4096;
+    //private static final int MAX = 32768;
     private static final Scanner STDIN = new Scanner(System.in);
 
     private static SearchEngine engine = new MyEngine();
@@ -37,8 +38,7 @@ public class SimpleFrontEnd {
 
     public static void main(String[] args){
         buildIndex();
-        while (true)
-            serveUser();
+        serveUser();
 
     }
     
