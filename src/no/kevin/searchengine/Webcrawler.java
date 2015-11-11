@@ -41,8 +41,7 @@ public class Webcrawler
 
     public void crawl(String url)
     {
-        WebPageReader reader = new WebPageReader(url);
-        engine.addAll(reader.getLinks());
+        readAllLinks(url);
         while (engine.hasNext() && words < maxSize)
         {
             readAllLinks(engine.next());
