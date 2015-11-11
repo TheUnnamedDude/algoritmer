@@ -59,23 +59,4 @@ public class MyEngine implements SearchEngine {
             e.printStackTrace();
         }
     }
-    
-    /*
-     * Simple test code
-     */
-    public static void main(String[] args){
-
-        String AFTEN = "https://snl.no";
-        String TARGET = "inn";
-
-        MyEngine engine = new MyEngine();
-        System.out.print("Searching, start....");
-        engine.crawlFrom(AFTEN);
-        System.out.printf("finish. Size of index = %d%n",engine.size());
-
-        System.out.printf("Occurences of \"%s\":%n",TARGET);
-        String[] results = engine.searchHits(TARGET);
-        for (String s: results)
-            System.out.println(s);
-    }
 }

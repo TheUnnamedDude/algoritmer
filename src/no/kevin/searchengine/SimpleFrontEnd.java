@@ -47,14 +47,14 @@ public class SimpleFrontEnd {
     
     private static double memoryFootprintInMegaBytes(){
         System.gc();
-        try
+        /*try
         {
-            Thread.sleep(10000);
+            Thread.sleep(3000);
         }
         catch (InterruptedException e)
         {
             e.printStackTrace();
-        }
+        }*/
         Runtime runtime = Runtime.getRuntime();
         return 1e-6*( runtime.totalMemory() -  runtime.freeMemory() );
     }

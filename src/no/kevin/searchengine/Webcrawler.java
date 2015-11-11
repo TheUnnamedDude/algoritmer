@@ -2,7 +2,12 @@ package no.kevin.searchengine;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Stack;
+import java.util.Queue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
@@ -14,15 +19,9 @@ public class Webcrawler
     private int words;
     private int maxSize;
 
-    public static void main(String[] args)
-    {
-        new Webcrawler().crawl("http://aftenposten.no/");
-    }
-
-    public Webcrawler()
-    {
-        this(Short.MAX_VALUE);
-    }
+    private final boolean ONE_TIME_USE = true;
+    private final boolean GIVE_GC_TIME = true;
+    private final boolean DEBUG_INFO = false;
 
     public Webcrawler(int maxSize)
     {
@@ -48,17 +47,37 @@ public class Webcrawler
         {
             readAllLinks(engine.next());
         }
-        if (words >= maxSize)
+        if (ONE_TIME_USE)
         {
+            // go away useless stuffs, i want less ram usage!
             engine = null;
             visitedLinks = null;
+            // We cant work directly on the hashmap
+            new ArrayList<>(index.keySet()).stream()
+                    .filter(key -> index.get(key) == null)
+                    .forEach(key -> index.remove(key));
+        }
+        if (GIVE_GC_TIME)
+        {
+            System.gc();
+            try
+            {
+                Thread.sleep(1000);
+            }
+            catch (InterruptedException e)
+            {
+                e.printStackTrace();
+            }
         }
     }
 
     private void readAllLinks(String url)
     {
-        System.out.printf("(%5d/%5d) ", words, maxSize);
-        System.out.printf("crawling: %s%n", url);
+        if (DEBUG_INFO)
+        {
+            System.out.printf("(%5d/%5d) ", words, maxSize);
+            System.out.printf("crawling: %s%n", url);
+        }
 
         WebPageReader reader = new WebPageReader(url);
         reader.run();
@@ -82,9 +101,10 @@ public class Webcrawler
             else
             {
                 list = Arrays.copyOf(list, list.length + 1);
-                list[list.length - 1] = url;
             }
             words++;
+            list[list.length - 1] = url;
+
             index.put(word, list);
         }
     }
@@ -124,7 +144,6 @@ public class Webcrawler
     public interface CrawlerEngine
     {
         boolean hasNext();
-        void clear();
         String next();
         void add(String value);
 
@@ -160,12 +179,6 @@ public class Webcrawler
         {
             return !urlStack.empty();
         }
-
-        @Override
-        public void clear()
-        {
-            this.urlStack.clear();
-        }
     }
 
     public class WidthFirstCrawlerEngine implements CrawlerEngine
@@ -193,27 +206,6 @@ public class Webcrawler
         public boolean hasNext()
         {
             return !urlQueue.isEmpty();
-        }
-
-        @Override
-        public void clear()
-        {
-            urlQueue.clear();
-        }
-    }
-
-    public class ByteUrl
-    {
-        private byte[] bytes;
-
-        public ByteUrl(String original)
-        {
-
-        }
-
-        public String value()
-        {
-            return null;
         }
     }
 }
